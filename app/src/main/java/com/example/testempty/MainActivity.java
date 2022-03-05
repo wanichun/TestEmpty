@@ -2,6 +2,7 @@ package com.example.testempty;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Intent;
 import android.database.Cursor;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -22,28 +23,59 @@ import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.nio.channels.FileChannel;
 import java.util.Objects;
 import java.io.BufferedReader;
 
 public class MainActivity extends AppCompatActivity {
 
-    private String TAG = "MainActivity";
+    private String TAG = "MainAt";
+
 
     private Context mContext = this;
     public File mediaStorageDir;
+    String filePathInfo_old;
+    String filePathInfo;
+    String filePathSave;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        //filePathSave = Environment.DIRECTORY_DOCUMENTS + File.separator + "Test";
+        filePathSave = Environment.DIRECTORY_PICTURES;// + File.separator + "Test";
+        galleryAddFolder(new File(filePathSave));
+
+        mediaStorageDir = new File(Environment.getExternalStorageDirectory(), filePathSave);
+        if(!mediaStorageDir.exists()){
+            if(!mediaStorageDir.mkdirs()){
+                return;
+            }
+        }
+        Log.d(TAG,"mediaStorageDir;" + mediaStorageDir.getPath() + " " + mediaStorageDir.exists());
+
+        filePathInfo_old = mediaStorageDir.getPath() + File.separator + "tmp.txt";
+        Log.d(TAG,"filePathInfo_old;" +filePathInfo_old + " " + (new File(filePathInfo_old).exists()));
+
+        File newDir = new File(mContext.getExternalFilesDir(null).getPath());
+        if(!newDir.exists()){
+            newDir.mkdir();
+        }
+        Log.d(TAG,"newDir;"  +  newDir.getPath() + " "+ newDir.exists());
+
+        filePathInfo = newDir.getPath() + File.separator + "tmp.txt";
+        Log.d(TAG,"filePathInfo;" + filePathInfo + " " +(new File(filePathInfo).exists()));
 
     }
 
@@ -76,55 +108,125 @@ public class MainActivity extends AppCompatActivity {
 
      */
 
+    private void galleryAddFolder(File file){
+        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+        Uri uri = Uri.fromFile(file);
+        mediaScanIntent.setData(uri);
+        mContext.sendBroadcast(mediaScanIntent);
+    }
+
+    private boolean copyFileToInternalStorage(String oldPath, String newPath)
+    {
+        try{
+/*
+            InputStream inputStream = mContext.getContentResolver().openInputStream(Uri.fromFile(new File(oldPath)));
+            File backupDB = new File(newPath);
+            FileOutputStream outputStream = new FileOutputStream(backupDB);
+            int read = 0;
+            int bufferSize = 1024;
+            final byte[] buffers = new byte[bufferSize];
+            while ((read = inputStream.read(buffers)) != - 1){
+                outputStream.write(buffers, 0, read);
+            }
+            inputStream.close();
+            outputStream.close();
+
+ */
+
+            File currentDB = new File(oldPath);
+            File backupDB = new File(newPath);
+            FileChannel src = new FileInputStream(currentDB).getChannel();
+            FileChannel dst = new FileOutputStream(backupDB).getChannel();
+            dst.transferFrom(src, 0, src.size());
+            src.close();
+            dst.close();
+        } catch(Exception e){
+            Log.d(TAG,"copy ; "  + e);
+            return false;
+        }
+        return true;
+    }
+
+    private void readFile(Uri uri){//String strPath){
+
+
+        BufferedReader br = null;
+        FileReader fr = null;
+        Log.d(TAG,"read ; "  + uri.getPath());
+        try{
+            //File file = new File(strPath);
+            //Uri uri = Uri.fromFile(file);
+            ContentResolver resolver = mContext.getApplicationContext().getContentResolver();
+            ParcelFileDescriptor pdf = resolver.openFileDescriptor(uri,"r");
+
+            fr = new FileReader(pdf.getFileDescriptor());
+            br = new BufferedReader(fr);
+
+            String str = br.readLine();
+            Log.d(TAG,"read ; "  + str );
+
+            br.close();
+            fr.close();
+            Toast.makeText(this, "File read successfully", Toast.LENGTH_SHORT).show();
+
+        }
+        catch(Exception e){
+            e.printStackTrace();
+            Log.d(TAG,"read ; "  + e);
+            Toast.makeText(this, "Fail to read", Toast.LENGTH_SHORT).show();
+        }
+
+        /**/
+
+    }
+    public static final int PICKFILE_RESULT_CODE = 1;
 
     public void buttonRead(View v) {
-        String fileName = "test.txt";
-        String displayName = "test.txt";
-        String text = " EmptyTest 1";
-        //Bitmap imageBitmap;
-        OutputStream outputStream;
+        Intent chooseFile = new Intent(Intent.ACTION_GET_CONTENT);
+        chooseFile.setType("*/*");
+        chooseFile = Intent.createChooser(chooseFile, "Choose a file");
+        startActivityForResult(chooseFile, PICKFILE_RESULT_CODE);
+        /*
+        boolean bCopy = copyFileToInternalStorage(filePathInfo_old, filePathInfo);
+        Log.d(TAG,"copyFileToInternalStorage: " + bCopy);
 
-        try {
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, "test");
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain"); //text/plane
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + File.separator + "SMC");
-            values.put(MediaStore.Files.FileColumns.IS_PENDING, 1);
+        if(!new File(filePathInfo).exists()){
+            Log.d(TAG,"filePathInfo no file");
+        }
 
-            ContentResolver contentResolver = getContentResolver();
-            Uri uri = contentResolver.insert(MediaStore.Files.getContentUri("external"), values);      //important!
+        readFile(filePathInfo_old);
+        readFile(filePathInfo);
+         */
 
-            outputStream = getContentResolver().openOutputStream(uri);
+    }
 
-            String str = "heloo";
-            byte[] strToByte = str.getBytes();
-            outputStream.write(strToByte);
+    private Uri fileUri;
+    private String filePath;
 
-            outputStream.flush();
-            outputStream.close();
-            values.put(MediaStore.Files.FileColumns.IS_PENDING, 0);
-            contentResolver.update(uri, values, null, null);
-
-
-            Toast.makeText(this, "File created successfully", Toast.LENGTH_SHORT).show();
-        } catch (IOException e) {
-            Toast.makeText(this, "Fail to create file", Toast.LENGTH_SHORT).show();
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        switch (requestCode) {
+            case PICKFILE_RESULT_CODE:
+                if (resultCode == -1) {
+                    fileUri = data.getData();
+                    filePath = fileUri.getPath();
+                    readFile(fileUri);
+                }
+                break;
         }
     }
 
     public void buttonWrite(View v)
     {
-        String fileName = "test.txt";
-        String displayName = "test.txt";
-        String text = " EmptyTest 1" ;
-        //Bitmap imageBitmap;
+        String displayName = "tmp.txt";
         OutputStream outputStream ;
 
         try {
             ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, "test");
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);
             values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain"); //text/plane
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + File.separator + "SMC");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, filePathSave);
             values.put(MediaStore.Files.FileColumns.IS_PENDING, 1);
 
             ContentResolver contentResolver = getContentResolver();
@@ -141,6 +243,7 @@ public class MainActivity extends AppCompatActivity {
             values.put(MediaStore.Files.FileColumns.IS_PENDING, 0);
             contentResolver.update(uri, values, null, null);
 
+            Log.d(TAG,"write: " + filePathSave + ", " + filePathSave);
 
             Toast.makeText(this, "File created successfully", Toast.LENGTH_SHORT).show();
         } catch (IOException e) {
